@@ -7,16 +7,23 @@ import io.vertx.core.Handler;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.json.Json;
-import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 import io.vertx.ext.jdbc.JDBCClient;
 import io.vertx.ext.sql.SQLConnection;
-import io.vertx.ext.sql.UpdateResult;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.StaticHandler;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -24,9 +31,16 @@ import java.util.stream.Collectors;
  * This is a verticle. A verticle is a _Vert.x component_. This verticle is implemented in Java, but you can
  * implement them in JavaScript, Groovy or even Ruby.
  */
-public class MyFirstVerticle extends AbstractVerticle {
+public class MyFirstVerticle extends AbstractVerticle  {
+
+  private Logger log = LoggerFactory.getLogger(MyFirstVerticle.class);
 
   private JDBCClient jdbc;
+
+  private DbOperations dbOperations = new DbOperations();
+
+
+  private JsonObject config;
 
   /**
    * This method is called when the verticle is deployed. It creates a HTTP server and registers a simple request
@@ -39,32 +53,50 @@ public class MyFirstVerticle extends AbstractVerticle {
    * @param fut the future
    */
   @Override
-  public void start(Future<Void> fut) {
-
+  public void start(Future<Void> fut)  throws Exception {
+    readConfig();
     // Create a JDBC client
-    jdbc = JDBCClient.createShared(vertx, config(), "My-Whisky-Collection");
-
+    jdbc = JDBCClient.createShared(vertx, this.config, "My-Whisky-Collection");
+    log.info("jdbc", jdbc);
     startBackend(
-        (connection) -> createSomeData(connection,
+        (connection) -> dbOperations.createSomeData(connection,
             (nothing) -> startWebApp(
                 (http) -> completeStartup(http, fut)
             ), fut
         ), fut);
   }
 
+  private void readConfig() throws URISyntaxException, IOException {
+    this.config = config();
+
+    //for development run
+    if(config.getString("url") == null) {
+      URL resource = getClass().getClassLoader().getResource("my-it-config.json");
+      URI uri = resource.toURI();
+      Path path = Paths.get(uri);
+      String s = new String(Files.readAllBytes(path));
+      this.config = new JsonObject(s);
+    }
+  }
+
   private void startBackend(Handler<AsyncResult<SQLConnection>> next, Future<Void> fut) {
-    jdbc.getConnection(ar -> {
+    Handler<AsyncResult<SQLConnection>> asyncResultHandler = ar -> {
       if (ar.failed()) {
+        log.info("jdbc failed");
         fut.fail(ar.cause());
       } else {
+        log.info("jdbc connection done");
         next.handle(Future.succeededFuture(ar.result()));
       }
-    });
+    };
+    jdbc.getConnection(asyncResultHandler);
   }
 
   private void startWebApp(Handler<AsyncResult<HttpServer>> next) {
     // Create a router object.
     Router router = Router.router(vertx);
+
+    log.info("start web");
 
     // Bind "/" to our hello message.
     router.route("/").handler(routingContext -> {
@@ -83,17 +115,18 @@ public class MyFirstVerticle extends AbstractVerticle {
     router.put("/api/whiskies/:id").handler(this::updateOne);
     router.delete("/api/whiskies/:id").handler(this::deleteOne);
 
+      log.info("creating server, port {}", config.getInteger("http.port", 8080));
 
-    // Create the HTTP server and pass the "accept" method to the request handler.
-    vertx
-        .createHttpServer()
-        .requestHandler(router::accept)
-        .listen(
-            // Retrieve the port from the configuration,
-            // default to 8080.
-            config().getInteger("http.port", 8080),
-            next::handle
-        );
+      // Create the HTTP server and pass the "accept" method to the request handler.
+      vertx
+          .createHttpServer()
+          .requestHandler(router::accept)
+          .listen(
+              // Retrieve the port from the configuration,
+              // default to 8080.
+              config.getInteger("http.port", 8080),
+              next::handle
+          );
   }
 
   private void completeStartup(AsyncResult<HttpServer> http, Future<Void> fut) {
@@ -112,12 +145,13 @@ public class MyFirstVerticle extends AbstractVerticle {
   }
 
   private void addOne(RoutingContext routingContext) {
+    final Whisky whisky = Json.decodeValue(routingContext.getBodyAsString(),
+            Whisky.class);
+
     jdbc.getConnection(ar -> {
       // Read the request's content and create an instance of Whisky.
-      final Whisky whisky = Json.decodeValue(routingContext.getBodyAsString(),
-          Whisky.class);
       SQLConnection connection = ar.result();
-      insert(whisky, connection, (r) ->
+      dbOperations.insert(whisky, connection, (r) ->
           routingContext.response()
               .setStatusCode(201)
               .putHeader("content-type", "application/json; charset=utf-8")
@@ -135,7 +169,7 @@ public class MyFirstVerticle extends AbstractVerticle {
       jdbc.getConnection(ar -> {
         // Read the request's content and create an instance of Whisky.
         SQLConnection connection = ar.result();
-        select(id, connection, result -> {
+        dbOperations.select(id, connection, result -> {
           if (result.succeeded()) {
             routingContext.response()
                 .setStatusCode(200)
@@ -157,18 +191,18 @@ public class MyFirstVerticle extends AbstractVerticle {
     if (id == null || json == null) {
       routingContext.response().setStatusCode(400).end();
     } else {
-      jdbc.getConnection(ar ->
-          update(id, json, ar.result(), (whisky) -> {
-            if (whisky.failed()) {
-              routingContext.response().setStatusCode(404).end();
-            } else {
-              routingContext.response()
-                  .putHeader("content-type", "application/json; charset=utf-8")
-                  .end(Json.encodePrettily(whisky.result()));
-            }
-            ar.result().close();
-          })
-      );
+      Handler<AsyncResult<SQLConnection>> asyncResultHandler = ar ->
+              dbOperations.update(id, json, ar.result(), (whisky) -> {
+                if (whisky.failed()) {
+                  routingContext.response().setStatusCode(404).end();
+                } else {
+                  routingContext.response()
+                          .putHeader("content-type", "application/json; charset=utf-8")
+                          .end(Json.encodePrettily(whisky.result()));
+                }
+                ar.result().close();
+              });
+      jdbc.getConnection(asyncResultHandler);
     }
   }
 
@@ -177,117 +211,30 @@ public class MyFirstVerticle extends AbstractVerticle {
     if (id == null) {
       routingContext.response().setStatusCode(400).end();
     } else {
-      jdbc.getConnection(ar -> {
+      Handler<AsyncResult<SQLConnection>> asyncResultHandler = ar -> {
         SQLConnection connection = ar.result();
         connection.execute("DELETE FROM Whisky WHERE id='" + id + "'",
-            result -> {
-              routingContext.response().setStatusCode(204).end();
-              connection.close();
-            });
-      });
+                result -> {
+                  routingContext.response().setStatusCode(204).end();
+                  connection.close();
+                });
+      };
+      jdbc.getConnection(asyncResultHandler);
     }
   }
 
   private void getAll(RoutingContext routingContext) {
-    jdbc.getConnection(ar -> {
+    Handler<AsyncResult<SQLConnection>> asyncResultHandler = ar -> {
       SQLConnection connection = ar.result();
       connection.query("SELECT * FROM Whisky", result -> {
         List<Whisky> whiskies = result.result().getRows().stream().map(Whisky::new).collect(Collectors.toList());
         routingContext.response()
-            .putHeader("content-type", "application/json; charset=utf-8")
-            .end(Json.encodePrettily(whiskies));
+                .putHeader("content-type", "application/json; charset=utf-8")
+                .end(Json.encodePrettily(whiskies));
         connection.close();
       });
-    });
-  }
-
-  private void createSomeData(AsyncResult<SQLConnection> result, Handler<AsyncResult<Void>> next, Future<Void> fut) {
-    if (result.failed()) {
-      fut.fail(result.cause());
-    } else {
-      SQLConnection connection = result.result();
-      connection.execute(
-          "CREATE TABLE IF NOT EXISTS Whisky (id INTEGER IDENTITY, name varchar(100), origin varchar" +
-              "(100))",
-          ar -> {
-            if (ar.failed()) {
-              fut.fail(ar.cause());
-              connection.close();
-              return;
-            }
-            connection.query("SELECT * FROM Whisky", select -> {
-              if (select.failed()) {
-                fut.fail(select.cause());
-                connection.close();
-                return;
-              }
-              if (select.result().getNumRows() == 0) {
-                insert(
-                    new Whisky("Bowmore 15 Years Laimrig", "Scotland, Islay"), connection,
-                    (v) -> insert(new Whisky("Talisker 57° North", "Scotland, Island"), connection,
-                        (r) -> {
-                          next.handle(Future.<Void>succeededFuture());
-                          connection.close();
-                        }));
-              } else {
-                next.handle(Future.<Void>succeededFuture());
-                connection.close();
-              }
-            });
-
-          });
-    }
-  }
-
-  private void insert(Whisky whisky, SQLConnection connection, Handler<AsyncResult<Whisky>> next) {
-    String sql = "INSERT INTO Whisky (name, origin) VALUES ?, ?";
-    connection.updateWithParams(sql,
-        new JsonArray().add(whisky.getName()).add(whisky.getOrigin()),
-        (ar) -> {
-          if (ar.failed()) {
-            next.handle(Future.failedFuture(ar.cause()));
-            connection.close();
-            return;
-          }
-          UpdateResult result = ar.result();
-          // Build a new whisky instance with the generated id.
-          Whisky w = new Whisky(result.getKeys().getInteger(0), whisky.getName(), whisky.getOrigin());
-          next.handle(Future.succeededFuture(w));
-        });
-  }
-
-  private void select(String id, SQLConnection connection, Handler<AsyncResult<Whisky>> resultHandler) {
-    connection.queryWithParams("SELECT * FROM Whisky WHERE id=?", new JsonArray().add(id), ar -> {
-      if (ar.failed()) {
-        resultHandler.handle(Future.failedFuture("Whisky not found"));
-      } else {
-        if (ar.result().getNumRows() >= 1) {
-          resultHandler.handle(Future.succeededFuture(new Whisky(ar.result().getRows().get(0))));
-        } else {
-          resultHandler.handle(Future.failedFuture("Whisky not found"));
-        }
-      }
-    });
-  }
-
-  private void update(String id, JsonObject content, SQLConnection connection,
-                      Handler<AsyncResult<Whisky>> resultHandler) {
-    String sql = "UPDATE Whisky SET name=?, origin=? WHERE id=?";
-    connection.updateWithParams(sql,
-        new JsonArray().add(content.getString("name")).add(content.getString("origin")).add(id),
-        update -> {
-          if (update.failed()) {
-            resultHandler.handle(Future.failedFuture("Cannot update the whisky"));
-            return;
-          }
-          if (update.result().getUpdated() == 0) {
-            resultHandler.handle(Future.failedFuture("Whisky not found"));
-            return;
-          }
-          resultHandler.handle(
-              Future.succeededFuture(new Whisky(Integer.valueOf(id),
-                  content.getString("name"), content.getString("origin"))));
-        });
+    };
+    jdbc.getConnection(asyncResultHandler);
   }
 
 }
