@@ -2,7 +2,9 @@ package io.vertx.blog.first;
 
 import io.vertx.core.json.JsonObject;
 
-public class Whisky {
+import java.io.Serializable;
+
+public class Whisky implements Serializable {
 
   private final int id;
 

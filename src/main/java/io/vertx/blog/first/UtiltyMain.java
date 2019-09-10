@@ -11,7 +11,7 @@ public class UtiltyMain {
         VertxOptions options = new VertxOptions().setClustered(false);
         String dir = "src/main/java/";
         System.setProperty("vertx.cwd", dir);
-        String verticleID = MyFirstVerticle.class.getName();
+        String verticleID = TheVerticle.class.getName();
 
         Consumer<Vertx> runner = vertx ->
         {

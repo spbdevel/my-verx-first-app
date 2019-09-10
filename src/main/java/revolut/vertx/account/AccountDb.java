@@ -1,4 +1,4 @@
-package io.vertx.blog.first;
+package revolut.vertx.account;
 
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
@@ -8,25 +8,26 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.UpdateResult;
 
-public class DbOperations {
+import java.util.function.BiFunction;
+
+public class AccountDb {
 
 
 
-    void createSomeData(AsyncResult<SQLConnection> result, Handler<AsyncResult<Void>> next, Future<Void> fut) {
+    public void createSomeData(AsyncResult<SQLConnection> result, Handler<AsyncResult<Void>> next, Future<Void> fut) {
         if (result.failed()) {
             fut.fail(result.cause());
         } else {
             SQLConnection connection = result.result();
             connection.execute(
-                    "CREATE TABLE IF NOT EXISTS Whisky (id INTEGER IDENTITY, name varchar(100), origin varchar" +
-                            "(100))",
+                    "CREATE TABLE IF NOT EXISTS Account (id INTEGER IDENTITY, num varchar(100), balance INTEGER)",
                     ar -> {
                         if (ar.failed()) {
                             fut.fail(ar.cause());
                             connection.close();
                             return;
                         }
-                        connection.query("SELECT * FROM Whisky", select -> {
+                        connection.query("SELECT * FROM Account", select -> {
                             if (select.failed()) {
                                 fut.fail(select.cause());
                                 connection.close();
@@ -34,8 +35,8 @@ public class DbOperations {
                             }
                             if (select.result().getNumRows() == 0) {
                                 insert(
-                                        new Whisky("Bowmore 15 Years Laimrig", "Scotland, Islay"), connection,
-                                        (v) -> insert(new Whisky("Talisker 57° North", "Scotland, Island"), connection,
+                                        new Account("Some num", 1000), connection,
+                                        (v) -> insert(new Account("Another num", 500000), connection,
                                                 (r) -> {
                                                     next.handle(Future.<Void>succeededFuture());
                                                     connection.close();
@@ -50,10 +51,23 @@ public class DbOperations {
         }
     }
 
-    void insert(Whisky whisky, SQLConnection connection, Handler<AsyncResult<Whisky>> next) {
-        String sql = "INSERT INTO Whisky (name, origin) VALUES ?, ?";
+    void insert(Account accnt, SQLConnection connection, Handler<AsyncResult<?>> next) {
+        String sql = "INSERT INTO Account (num, balance) VALUES ?, ?";
+        JsonArray add = new JsonArray().add(accnt.getNum()).add(accnt.getBalance());
+        insert(sql, add, connection, next, this::createAccount);
+    }
+
+    private Account createAccount(UpdateResult result, JsonArray arr) {
+        return new Account(result.getKeys().getInteger(0),
+                arr.getString(0),
+                arr.getInteger(1));
+    }
+
+
+    void  insert(String sql, JsonArray arr, SQLConnection connection, Handler<AsyncResult<?>> next,
+                 BiFunction<UpdateResult, JsonArray, Object> fun) {
         connection.updateWithParams(sql,
-                new JsonArray().add(whisky.getName()).add(whisky.getOrigin()),
+                arr,
                 (ar) -> {
                     if (ar.failed()) {
                         next.handle(Future.failedFuture(ar.cause()));
@@ -61,43 +75,46 @@ public class DbOperations {
                         return;
                     }
                     UpdateResult result = ar.result();
-                    // Build a new whisky instance with the generated id.
-                    Whisky w = new Whisky(result.getKeys().getInteger(0), whisky.getName(), whisky.getOrigin());
-                    next.handle(Future.succeededFuture(w));
+
+                    Object apply = fun.apply(result, arr);
+                    next.handle(Future.succeededFuture(apply));
                 });
+
     }
 
-    void select(String id, SQLConnection connection, Handler<AsyncResult<Whisky>> resultHandler) {
-        connection.queryWithParams("SELECT * FROM Whisky WHERE id=?", new JsonArray().add(id), ar -> {
+
+
+    void select(String id, SQLConnection connection, Handler<AsyncResult<Account>> resultHandler) {
+        connection.queryWithParams("SELECT * FROM Account WHERE id=?", new JsonArray().add(id), ar -> {
             if (ar.failed()) {
-                resultHandler.handle(Future.failedFuture("Whisky not found"));
+                resultHandler.handle(Future.failedFuture("Account not found"));
             } else {
                 if (ar.result().getNumRows() >= 1) {
-                    resultHandler.handle(Future.succeededFuture(new Whisky(ar.result().getRows().get(0))));
+                    resultHandler.handle(Future.succeededFuture(new Account(ar.result().getRows().get(0))));
                 } else {
-                    resultHandler.handle(Future.failedFuture("Whisky not found"));
+                    resultHandler.handle(Future.failedFuture("Account not found"));
                 }
             }
         });
     }
 
     void update(String id, JsonObject content, SQLConnection connection,
-                        Handler<AsyncResult<Whisky>> resultHandler) {
-        String sql = "UPDATE Whisky SET name=?, origin=? WHERE id=?";
+                        Handler<AsyncResult<Account>> resultHandler) {
+        String sql = "UPDATE Account SET name=?, origin=? WHERE id=?";
         connection.updateWithParams(sql,
                 new JsonArray().add(content.getString("name")).add(content.getString("origin")).add(id),
                 update -> {
                     if (update.failed()) {
-                        resultHandler.handle(Future.failedFuture("Cannot update the whisky"));
+                        resultHandler.handle(Future.failedFuture("Cannot update the Account"));
                         return;
                     }
                     if (update.result().getUpdated() == 0) {
-                        resultHandler.handle(Future.failedFuture("Whisky not found"));
+                        resultHandler.handle(Future.failedFuture("Account not found"));
                         return;
                     }
                     resultHandler.handle(
-                            Future.succeededFuture(new Whisky(Integer.valueOf(id),
-                                    content.getString("name"), content.getString("origin"))));
+                            Future.succeededFuture(new Account(Integer.valueOf(id),
+                                    content.getString("num"), content.getInteger("balance"))));
                 });
     }
 
