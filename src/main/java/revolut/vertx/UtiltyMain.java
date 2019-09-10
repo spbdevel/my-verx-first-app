@@ -1,4 +1,4 @@
-package io.vertx.blog.first;
+package revolut.vertx;
 
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;

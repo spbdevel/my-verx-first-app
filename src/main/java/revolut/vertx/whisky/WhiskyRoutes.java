@@ -1,4 +1,4 @@
-package io.vertx.blog.first;
+package revolut.vertx.whisky;
 
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
@@ -21,7 +21,7 @@ public class WhiskyRoutes {
         this.jdbc = jdbc;
     }
 
-    void addOne(RoutingContext routingContext) {
+    public void addOne(RoutingContext routingContext) {
         final Whisky whisky = Json.decodeValue(routingContext.getBodyAsString(),
                 Whisky.class);
 
@@ -38,7 +38,7 @@ public class WhiskyRoutes {
 
     }
 
-    void getOne(RoutingContext routingContext) {
+    public void getOne(RoutingContext routingContext) {
         final String id = routingContext.request().getParam("id");
         if (id == null) {
             routingContext.response().setStatusCode(400).end();
@@ -62,7 +62,7 @@ public class WhiskyRoutes {
         }
     }
 
-    void updateOne(RoutingContext routingContext) {
+    public void updateOne(RoutingContext routingContext) {
         final String id = routingContext.request().getParam("id");
         JsonObject json = routingContext.getBodyAsJson();
         if (id == null || json == null) {
@@ -83,7 +83,7 @@ public class WhiskyRoutes {
         }
     }
 
-    void deleteOne(RoutingContext routingContext) {
+    public void deleteOne(RoutingContext routingContext) {
         String id = routingContext.request().getParam("id");
         if (id == null) {
             routingContext.response().setStatusCode(400).end();
@@ -100,7 +100,7 @@ public class WhiskyRoutes {
         }
     }
 
-    void getAll(RoutingContext routingContext) {
+    public void getAll(RoutingContext routingContext) {
         Handler<AsyncResult<SQLConnection>> asyncResultHandler = ar -> {
             SQLConnection connection = ar.result();
             connection.query("SELECT * FROM Whisky", result -> {

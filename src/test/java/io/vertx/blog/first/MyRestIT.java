@@ -1,6 +1,7 @@
 package io.vertx.blog.first;
 
 import com.jayway.restassured.RestAssured;
+import revolut.vertx.whisky.Whisky;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;

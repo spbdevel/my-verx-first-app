@@ -1,5 +1,7 @@
 package io.vertx.blog.first;
 
+import revolut.vertx.TheVerticle;
+import revolut.vertx.whisky.Whisky;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.Json;

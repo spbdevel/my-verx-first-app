@@ -1,5 +1,7 @@
-package io.vertx.blog.first;
+package revolut.vertx;
 
+import revolut.vertx.whisky.WhiskyDb;
+import revolut.vertx.whisky.WhiskyRoutes;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;

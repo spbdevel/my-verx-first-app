@@ -1,4 +1,4 @@
-package io.vertx.blog.first;
+package revolut.vertx.whisky;
 
 import io.vertx.core.json.JsonObject;
 

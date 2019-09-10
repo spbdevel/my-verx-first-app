@@ -1,4 +1,4 @@
-package io.vertx.blog.first;
+package revolut.vertx.whisky;
 
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
@@ -14,7 +14,7 @@ public class WhiskyDb {
 
 
 
-    void createSomeData(AsyncResult<SQLConnection> result, Handler<AsyncResult<Void>> next, Future<Void> fut) {
+    public void createSomeData(AsyncResult<SQLConnection> result, Handler<AsyncResult<Void>> next, Future<Void> fut) {
         if (result.failed()) {
             fut.fail(result.cause());
         } else {
