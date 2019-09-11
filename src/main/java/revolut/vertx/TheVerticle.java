@@ -2,8 +2,6 @@ package revolut.vertx;
 
 import revolut.vertx.transfer.TransferDb;
 import revolut.vertx.transfer.TransferRoutes;
-import revolut.vertx.whisky.WhiskyDb;
-import revolut.vertx.whisky.WhiskyRoutes;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
@@ -29,33 +27,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-/**
- * This is a verticle. A verticle is a _Vert.x component_. This verticle is implemented in Java, but you can
- * implement them in JavaScript, Groovy or even Ruby.
- */
 public class TheVerticle extends AbstractVerticle {
 
     private Logger log = LoggerFactory.getLogger(TheVerticle.class);
 
     private JDBCClient jdbc;
 
-    private WhiskyDb dbOperations = new WhiskyDb();
     private AccountDb accountDb = new AccountDb();
     private TransferDb transferDb = new TransferDb();
 
 
     private JsonObject config;
 
-    /**
-     * This method is called when the verticle is deployed. It creates a HTTP server and registers a simple request
-     * handler.
-     * <p/>
-     * Notice the `listen` method. It passes a lambda checking the port binding result. When the HTTP server has been
-     * bound on the port, it call the `complete` method to inform that the starting has completed. Else it reports the
-     * error.
-     *
-     * @param fut the future
-     */
     @Override
     public void start(Future<Void> fut) throws Exception {
         readConfig();
@@ -69,6 +52,7 @@ public class TheVerticle extends AbstractVerticle {
         );
 
 
+/*
         Handler<AsyncResult<Void>> handler = (nothing) ->
             startBackend(
                     (conn) -> {
@@ -76,10 +60,11 @@ public class TheVerticle extends AbstractVerticle {
                                 lastHandler, fut
                         );
                     }, fut);
+*/
 
         Handler<AsyncResult<Void>> accntHandler = (nothing) ->
                 startBackend((connection) ->
-                                accountDb.createSomeData(connection, handler, fut)
+                                accountDb.createSomeData(connection, lastHandler, fut)
                         , fut);
 
 
@@ -133,13 +118,6 @@ public class TheVerticle extends AbstractVerticle {
         });
 
         router.route("/assets/*").handler(StaticHandler.create("assets"));
-        WhiskyRoutes whiskyRoutes = new WhiskyRoutes(jdbc);
-        router.get("/api/whiskies").handler(whiskyRoutes::getAll);
-        router.route("/api/whiskies*").handler(BodyHandler.create());
-        router.post("/api/whiskies").handler(whiskyRoutes::addOne);
-        router.get("/api/whiskies/:id").handler(whiskyRoutes::getOne);
-        router.put("/api/whiskies/:id").handler(whiskyRoutes::updateOne);
-        router.delete("/api/whiskies/:id").handler(whiskyRoutes::deleteOne);
 
         AccountRoutes accountRoutes = new AccountRoutes(jdbc);
         router.get("/api/account").handler(accountRoutes::getAll);

@@ -3,8 +3,11 @@ package revolut.vertx;
 import io.vertx.core.json.Json;
 import io.vertx.ext.unit.Async;
 import io.vertx.ext.unit.TestContext;
+import org.junit.Assert;
 import org.junit.Test;
 import revolut.vertx.account.Account;
+
+import static org.junit.Assert.fail;
 
 
 public class AccountTest  extends BaseTest {
@@ -30,4 +33,16 @@ public class AccountTest  extends BaseTest {
         .write(json)
         .end();
   }
+
+
+  @Test
+  public void checkAddAccount1(TestContext context) {
+      try {
+          new Account("accnt1", -10000);
+          fail();
+      } catch (Exception e) {
+          Assert.assertTrue(true);
+      }
+  }
+
 }

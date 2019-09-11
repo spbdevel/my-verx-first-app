@@ -28,5 +28,5 @@ Once packaged, just launch the _fat jar_ as follows:
 java -jar target/my-first-app-1.0-SNAPSHOT-fat.jar
 ```
 
-Then, open a browser to http://localhost:8080.
+Then, open a browser to http://localhost:8090.
 

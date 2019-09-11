@@ -1,14 +1,15 @@
-package revolut.vertx;
+package revolut.vertx.base;
 
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.UpdateResult;
-import revolut.vertx.account.Account;
 
 import java.io.Serializable;
 import java.util.function.BiFunction;
@@ -16,6 +17,9 @@ import java.util.function.BiFunction;
 public abstract class DbBase <T extends Serializable>{
     final String SELECT_FROM;
     final String sql;
+
+    private final Logger log = LoggerFactory.getLogger(DbBase.class);
+
 
     public DbBase(String SELECT_FROM, String sql) {
         this.SELECT_FROM = SELECT_FROM;
@@ -31,12 +35,14 @@ public abstract class DbBase <T extends Serializable>{
                     sql,
                     ar -> {
                         if (ar.failed()) {
+                            log.error("error: " + ar.cause());
                             fut.fail(ar.cause());
                             connection.close();
                             return;
                         }
                         connection.query(SELECT_FROM, select -> {
                             if (select.failed()) {
+                                log.error("error: " + select.cause());
                                 fut.fail(select.cause());
                                 connection.close();
                                 return;
@@ -55,6 +61,7 @@ public abstract class DbBase <T extends Serializable>{
 
     protected void slct(Handler<AsyncResult<T>> resultHandler, AsyncResult<ResultSet> ar) {
         if (ar.failed()) {
+            log.error("error: " + ar.cause());
             resultHandler.handle(Future.failedFuture("not found"));
         } else {
             if (ar.result().getNumRows() >= 1) {
@@ -77,6 +84,7 @@ public abstract class DbBase <T extends Serializable>{
                 arr,
                 (ar) -> {
                     if (ar.failed()) {
+                        log.error("error: " + ar.cause());
                         next.handle(Future.failedFuture(ar.cause()));
                         connection.close();
                         return;

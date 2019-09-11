@@ -8,14 +8,14 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.UpdateResult;
-import revolut.vertx.DbBase;
+import revolut.vertx.base.DbBase;
 
 public class AccountDb extends DbBase <Account> {
 
 
     public AccountDb() {
         super("SELECT * FROM Account",
-                "CREATE TABLE IF NOT EXISTS Account (id INTEGER IDENTITY, num varchar(100), balance INTEGER)");
+                "CREATE TABLE IF NOT EXISTS Account (id INTEGER IDENTITY, num varchar(100), balance INTEGER NOT NULL)");
     }
 
 
@@ -47,7 +47,7 @@ public class AccountDb extends DbBase <Account> {
 
 
 
-    public void update(String id, JsonObject content, SQLConnection connection,
+    void update(String id, JsonObject content, SQLConnection connection,
                        Handler<AsyncResult<Account>> resultHandler) {
         String sql = "UPDATE Account SET name=?, origin=? WHERE id=?";
         connection.updateWithParams(sql,
@@ -57,7 +57,7 @@ public class AccountDb extends DbBase <Account> {
     }
 
 
-    void select(String id, SQLConnection connection, Handler<AsyncResult<Account>> resultHandler) {
+    public void select(String id, SQLConnection connection, Handler<AsyncResult<Account>> resultHandler) {
         connection.queryWithParams("SELECT * FROM Account WHERE id=?",
                 new JsonArray().add(id), ar -> slct(resultHandler, ar));
     }

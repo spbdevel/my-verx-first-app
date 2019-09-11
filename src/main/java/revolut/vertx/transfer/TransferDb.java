@@ -1,21 +1,21 @@
 package revolut.vertx.transfer;
 
 import io.vertx.core.AsyncResult;
-import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.UpdateResult;
-import revolut.vertx.DbBase;
+import revolut.vertx.base.DbBase;
 
 public class TransferDb extends DbBase <Transfer> {
 
 
     public TransferDb() {
         super("SELECT * FROM Transfer",
-                "CREATE TABLE IF NOT EXISTS Transfer (id INTEGER IDENTITY, toId INTEGER, fromId INTEGER, millis BIGINT, summary integer)");
+                "CREATE TABLE IF NOT EXISTS Transfer (id INTEGER IDENTITY, toId INTEGER NOT NULL," +
+                        " fromId INTEGER NOT NULL, millis BIGINT NOT NULL, summary integer NOT NULL)");
     }
 
 
@@ -41,7 +41,7 @@ public class TransferDb extends DbBase <Transfer> {
 
 
 
-    public void update(String id, JsonObject content, SQLConnection connection,
+    void update(String id, JsonObject content, SQLConnection connection,
                        Handler<AsyncResult<Transfer>> resultHandler) {
         String sql = "UPDATE Transfer SET fromId=?, toId=?, millis=?, summary=? WHERE id=?";
         connection.updateWithParams(sql,

@@ -7,6 +7,8 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.jdbc.JDBCClient;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.web.RoutingContext;
+import revolut.vertx.account.Account;
+import revolut.vertx.account.AccountDb;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -16,6 +18,7 @@ public class TransferRoutes {
     private final JDBCClient jdbc;
 
     private final TransferDb dbOperations = new TransferDb();
+    private final AccountDb accountDb = new AccountDb();
 
     public TransferRoutes(JDBCClient jdbc) {
         this.jdbc = jdbc;
@@ -25,17 +28,45 @@ public class TransferRoutes {
         final Transfer  transfer = Json.decodeValue(routingContext.getBodyAsString(),
                 Transfer .class);
 
+        //validate accounts existfirst
+        int fromId = transfer.getFromId();
+        int toId = transfer.getToId();
+
+        Handler<AsyncResult<?>> transferHandler = (r) -> {
+            jdbc.getConnection(ar -> {
+                SQLConnection connection = ar.result();
+
+                dbOperations.insert(transfer, connection, (r1) ->
+                        routingContext.response()
+                                .setStatusCode(201)
+                                .putHeader("content-type", "application/json; charset=utf-8")
+                                .end(Json.encodePrettily(r1.result())));
+                connection.close();
+            });
+        };
+
+
         jdbc.getConnection(ar -> {
-
             SQLConnection connection = ar.result();
-            dbOperations.insert(transfer, connection, (r) ->
-                    routingContext.response()
-                            .setStatusCode(201)
-                            .putHeader("content-type", "application/json; charset=utf-8")
-                            .end(Json.encodePrettily(r.result())));
-            connection.close();
-        });
+            Handler<AsyncResult<Account>> bothExistHandler = result -> {
+                if (result.succeeded()) {
+                    transferHandler.handle(result);
+                } else {
+                    routingContext.fail(result.cause());
+                }
+                connection.close();
+            };
 
+            Handler<AsyncResult<Account>> toExistHandler = result -> {
+                if (result.succeeded()) {
+                    accountDb.select(String.valueOf(toId), connection, bothExistHandler);
+                } else {
+                    routingContext.fail(result.cause());
+                }
+                connection.close();
+            };
+            accountDb.select(String.valueOf(fromId), connection, toExistHandler);
+        });
     }
 
     public void getOne(RoutingContext routingContext) {

@@ -3,15 +3,14 @@ package revolut.vertx.account;
 import io.vertx.core.json.JsonObject;
 
 import java.io.Serializable;
-import java.math.BigDecimal;
 
 public class Account implements Serializable {
 
   private final int id;
 
-  public String num;
+  private String num;
 
-  public Integer balance;
+  private Integer balance;
 
 
 
@@ -26,12 +25,16 @@ public class Account implements Serializable {
   }
 
   public Account(String num, Integer balance) {
+    if(balance < 0)
+      throw new IllegalArgumentException("balance should be above 0");
     this.num = num;
     this.balance = balance;
     this.id = -1;
   }
 
   public Account(int id, String num, Integer balance) {
+    if(balance < 0)
+      throw new IllegalArgumentException("balance should be above 0");
     this.id = id;
     this.num = num;
     this.balance = balance;
@@ -45,15 +48,8 @@ public class Account implements Serializable {
     return num;
   }
 
-  public void setNum(String num) {
-    this.num = num;
-  }
-
-  public Integer getBalance() {
+  public int getBalance() {
     return balance;
   }
 
-  public void setBalance(Integer balance) {
-    this.balance = balance;
-  }
 }
