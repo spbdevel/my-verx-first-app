@@ -1,5 +1,7 @@
 package revolut.vertx;
 
+import revolut.vertx.transfer.TransferDb;
+import revolut.vertx.transfer.TransferRoutes;
 import revolut.vertx.whisky.WhiskyDb;
 import revolut.vertx.whisky.WhiskyRoutes;
 import io.vertx.core.AbstractVerticle;
@@ -31,139 +33,158 @@ import java.nio.file.Paths;
  * This is a verticle. A verticle is a _Vert.x component_. This verticle is implemented in Java, but you can
  * implement them in JavaScript, Groovy or even Ruby.
  */
-public class TheVerticle extends AbstractVerticle  {
+public class TheVerticle extends AbstractVerticle {
 
-  private Logger log = LoggerFactory.getLogger(TheVerticle.class);
+    private Logger log = LoggerFactory.getLogger(TheVerticle.class);
 
-  private JDBCClient jdbc;
+    private JDBCClient jdbc;
 
-  private WhiskyDb dbOperations = new WhiskyDb();
-  private AccountDb accountDb = new AccountDb();
-
-
-  private JsonObject config;
-
-  /**
-   * This method is called when the verticle is deployed. It creates a HTTP server and registers a simple request
-   * handler.
-   * <p/>
-   * Notice the `listen` method. It passes a lambda checking the port binding result. When the HTTP server has been
-   * bound on the port, it call the `complete` method to inform that the starting has completed. Else it reports the
-   * error.
-   *
-   * @param fut the future
-   */
-  @Override
-  public void start(Future<Void> fut)  throws Exception {
-    readConfig();
-    // Create a JDBC client
-    jdbc = JDBCClient.createShared(vertx, this.config, "DataCollection");
-    log.info("jdbc", jdbc);
-
-    //should be called last
-    Handler<AsyncResult<Void>> handler = (nothing) -> {
-      startBackend(
-              (conn) -> dbOperations.createSomeData(conn,
-                      (nthng) -> startWebApp(
-                              (http) -> completeStartup(http, fut)
-                      ), fut
-              ), fut);
-    };
-
-    startBackend((connection) -> {
-      accountDb.createSomeData(connection, handler, fut);
-      }, fut);
+    private WhiskyDb dbOperations = new WhiskyDb();
+    private AccountDb accountDb = new AccountDb();
+    private TransferDb transferDb = new TransferDb();
 
 
-  }
+    private JsonObject config;
 
-  private void readConfig() throws URISyntaxException, IOException {
-    this.config = config();
+    /**
+     * This method is called when the verticle is deployed. It creates a HTTP server and registers a simple request
+     * handler.
+     * <p/>
+     * Notice the `listen` method. It passes a lambda checking the port binding result. When the HTTP server has been
+     * bound on the port, it call the `complete` method to inform that the starting has completed. Else it reports the
+     * error.
+     *
+     * @param fut the future
+     */
+    @Override
+    public void start(Future<Void> fut) throws Exception {
+        readConfig();
+        // Create a JDBC client
+        jdbc = JDBCClient.createShared(vertx, this.config, "DataCollection");
+        log.info("jdbc", jdbc);
 
-    //for development run
-    if(config.getString("url") == null) {
-      URL resource = getClass().getClassLoader().getResource("my-it-config.json");
-      URI uri = resource.toURI();
-      Path path = Paths.get(uri);
-      String s = new String(Files.readAllBytes(path));
-      this.config = new JsonObject(s);
+        //should be called last
+        Handler<AsyncResult<Void>> lastHandler = (nthng) -> startWebApp(
+                (http) -> completeStartup(http, fut)
+        );
+
+
+        Handler<AsyncResult<Void>> handler = (nothing) ->
+            startBackend(
+                    (conn) -> {
+                        dbOperations.createSomeData(conn,
+                                lastHandler, fut
+                        );
+                    }, fut);
+
+        Handler<AsyncResult<Void>> accntHandler = (nothing) ->
+                startBackend((connection) ->
+                                accountDb.createSomeData(connection, handler, fut)
+                        , fut);
+
+
+        startBackend((connection) -> {
+            transferDb.createSomeData(connection, accntHandler, fut);
+        }, fut);
+
+
+
     }
-  }
 
-  private void startBackend(Handler<AsyncResult<SQLConnection>> next, Future<Void> fut) {
-    Handler<AsyncResult<SQLConnection>> asyncResultHandler = ar -> {
-      if (ar.failed()) {
-        log.info("jdbc failed");
-        fut.fail(ar.cause());
-      } else {
-        log.info("jdbc connection done");
-        next.handle(Future.succeededFuture(ar.result()));
-      }
-    };
-    jdbc.getConnection(asyncResultHandler);
-  }
+    private void readConfig() throws URISyntaxException, IOException {
+        this.config = config();
 
-
-  private void startWebApp(Handler<AsyncResult<HttpServer>> next) {
-    // Create a router object.
-    Router router = Router.router(vertx);
-
-    log.info("start web");
-
-    // Bind "/" to our hello message.
-    router.route("/").handler(routingContext -> {
-      HttpServerResponse response = routingContext.response();
-      response
-          .putHeader("content-type", "text/html")
-          .end("<h1>Hello from my first Vert.x 3 application</h1>");
-    });
-
-    router.route("/assets/*").handler(StaticHandler.create("assets"));
-    WhiskyRoutes whiskyRoutes = new WhiskyRoutes(jdbc);
-    router.get("/api/whiskies").handler(whiskyRoutes::getAll);
-    router.route("/api/whiskies*").handler(BodyHandler.create());
-    router.post("/api/whiskies").handler(whiskyRoutes::addOne);
-    router.get("/api/whiskies/:id").handler(whiskyRoutes::getOne);
-    router.put("/api/whiskies/:id").handler(whiskyRoutes::updateOne);
-    router.delete("/api/whiskies/:id").handler(whiskyRoutes::deleteOne);
-
-    AccountRoutes accountRoutes= new AccountRoutes(jdbc);
-    router.get("/api/account").handler(accountRoutes::getAll);
-    router.route("/api/account*").handler(BodyHandler.create());
-    router.post("/api/account").handler(accountRoutes::addOne);
-    router.get("/api/account/:id").handler(accountRoutes::getOne);
-    router.put("/api/account/:id").handler(accountRoutes::updateOne);
-    router.delete("/api/account/:id").handler(accountRoutes::deleteOne);
-
-      log.info("creating server, port {}", config.getInteger("http.port", 8080));
-
-      // Create the HTTP server and pass the "accept" method to the request handler.
-      vertx
-          .createHttpServer()
-          .requestHandler(router::accept)
-          .listen(
-              // Retrieve the port from the configuration,
-              // default to 8080.
-              config.getInteger("http.port", 8080),
-              next::handle
-          );
-  }
-
-  private void completeStartup(AsyncResult<HttpServer> http, Future<Void> fut) {
-    if (http.succeeded()) {
-      fut.complete();
-    } else {
-      fut.fail(http.cause());
+        //for development run
+        if (config.getString("url") == null) {
+            URL resource = getClass().getClassLoader().getResource("my-it-config.json");
+            URI uri = resource.toURI();
+            Path path = Paths.get(uri);
+            String s = new String(Files.readAllBytes(path));
+            this.config = new JsonObject(s);
+        }
     }
-  }
+
+    private void startBackend(Handler<AsyncResult<SQLConnection>> next, Future<Void> fut) {
+        Handler<AsyncResult<SQLConnection>> asyncResultHandler = ar -> {
+            if (ar.failed()) {
+                log.info("jdbc failed");
+                fut.fail(ar.cause());
+            } else {
+                log.info("jdbc connection done");
+                next.handle(Future.succeededFuture(ar.result()));
+            }
+        };
+        jdbc.getConnection(asyncResultHandler);
+    }
 
 
-  @Override
-  public void stop() throws Exception {
-    // Close the JDBC client.
-    jdbc.close();
-  }
+    private void startWebApp(Handler<AsyncResult<HttpServer>> next) {
+        // Create a router object.
+        Router router = Router.router(vertx);
 
+        log.info("start web");
+
+        // Bind "/" to our hello message.
+        router.route("/").handler(routingContext -> {
+            HttpServerResponse response = routingContext.response();
+            response
+                    .putHeader("content-type", "text/html")
+                    .end("<h1>Hello from my first Vert.x 3 application</h1>");
+        });
+
+        router.route("/assets/*").handler(StaticHandler.create("assets"));
+        WhiskyRoutes whiskyRoutes = new WhiskyRoutes(jdbc);
+        router.get("/api/whiskies").handler(whiskyRoutes::getAll);
+        router.route("/api/whiskies*").handler(BodyHandler.create());
+        router.post("/api/whiskies").handler(whiskyRoutes::addOne);
+        router.get("/api/whiskies/:id").handler(whiskyRoutes::getOne);
+        router.put("/api/whiskies/:id").handler(whiskyRoutes::updateOne);
+        router.delete("/api/whiskies/:id").handler(whiskyRoutes::deleteOne);
+
+        AccountRoutes accountRoutes = new AccountRoutes(jdbc);
+        router.get("/api/account").handler(accountRoutes::getAll);
+        router.route("/api/account*").handler(BodyHandler.create());
+        router.post("/api/account").handler(accountRoutes::addOne);
+        router.get("/api/account/:id").handler(accountRoutes::getOne);
+        router.put("/api/account/:id").handler(accountRoutes::updateOne);
+        router.delete("/api/account/:id").handler(accountRoutes::deleteOne);
+
+        TransferRoutes transferRoutes = new TransferRoutes(jdbc);
+        router.get("/api/transfer").handler(transferRoutes::getAll);
+        router.route("/api/transfer*").handler(BodyHandler.create());
+        router.post("/api/transfer").handler(transferRoutes::addOne);
+        router.get("/api/transfer/:id").handler(transferRoutes::getOne);
+        router.put("/api/transfer/:id").handler(transferRoutes::updateOne);
+        router.delete("/api/transfer/:id").handler(transferRoutes::deleteOne);
+
+        log.info("creating server, port {}", config.getInteger("http.port", 8080));
+
+        // Create the HTTP server and pass the "accept" method to the request handler.
+        vertx
+                .createHttpServer()
+                .requestHandler(router::accept)
+                .listen(
+                        // Retrieve the port from the configuration,
+                        // default to 8080.
+                        config.getInteger("http.port", 8080),
+                        next::handle
+                );
+    }
+
+    private void completeStartup(AsyncResult<HttpServer> http, Future<Void> fut) {
+        if (http.succeeded()) {
+            fut.complete();
+        } else {
+            fut.fail(http.cause());
+        }
+    }
+
+
+    @Override
+    public void stop() throws Exception {
+        // Close the JDBC client.
+        jdbc.close();
+    }
 
 
 }

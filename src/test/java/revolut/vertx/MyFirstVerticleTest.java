@@ -1,4 +1,4 @@
-package io.vertx.blog.first;
+package revolut.vertx;
 
 import revolut.vertx.TheVerticle;
 import revolut.vertx.whisky.Whisky;

@@ -1,4 +1,4 @@
-package io.vertx.blog.first;
+package revolut.vertx;
 
 import com.jayway.restassured.RestAssured;
 import revolut.vertx.whisky.Whisky;

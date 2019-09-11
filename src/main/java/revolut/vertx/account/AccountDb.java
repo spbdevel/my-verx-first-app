@@ -26,7 +26,7 @@ public class AccountDb extends DbBase <Account> {
                 new Account("Some num", 1000), connection,
                 (v) -> insert(new Account("Another num", 500000), connection,
                         (r) -> {
-                            next.handle(Future.<Void>succeededFuture());
+                            next.handle(Future.succeededFuture());
                             connection.close();
                         }));
     }
@@ -52,16 +52,14 @@ public class AccountDb extends DbBase <Account> {
         String sql = "UPDATE Account SET name=?, origin=? WHERE id=?";
         connection.updateWithParams(sql,
                 new JsonArray().add(content.getString("name")).add(content.getString("origin")).add(id),
-                update -> {
-                    updt(id, content, resultHandler, update);
-                });
+                update -> updt(id, content, resultHandler, update)
+                );
     }
 
 
     void select(String id, SQLConnection connection, Handler<AsyncResult<Account>> resultHandler) {
-        connection.queryWithParams("SELECT * FROM Account WHERE id=?", new JsonArray().add(id), ar -> {
-            slct(resultHandler, ar);
-        });
+        connection.queryWithParams("SELECT * FROM Account WHERE id=?",
+                new JsonArray().add(id), ar -> slct(resultHandler, ar));
     }
 
 

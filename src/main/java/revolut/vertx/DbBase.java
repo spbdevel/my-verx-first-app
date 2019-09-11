@@ -65,7 +65,10 @@ public abstract class DbBase <T extends Serializable>{
         }
     }
 
-    protected abstract void insrt(Handler<AsyncResult<Void>> next, SQLConnection connection);
+    protected void insrt(Handler<AsyncResult<Void>> next, SQLConnection connection) {
+        next.handle(Future.succeededFuture());
+        connection.close();
+    }
 
 
     protected void  insert(String sql, JsonArray arr, SQLConnection connection, Handler<AsyncResult<?>> next,

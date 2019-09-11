@@ -1,4 +1,4 @@
-package revolut.vertx.account;
+package revolut.vertx.transfer;
 
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
@@ -11,24 +11,24 @@ import io.vertx.ext.web.RoutingContext;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class AccountRoutes {
+public class TransferRoutes {
 
     private final JDBCClient jdbc;
 
-    private final AccountDb dbOperations = new AccountDb();
+    private final TransferDb dbOperations = new TransferDb();
 
-    public AccountRoutes(JDBCClient jdbc) {
+    public TransferRoutes(JDBCClient jdbc) {
         this.jdbc = jdbc;
     }
 
     public void addOne(RoutingContext routingContext) {
-        final Account account = Json.decodeValue(routingContext.getBodyAsString(),
-                Account.class);
+        final Transfer  transfer = Json.decodeValue(routingContext.getBodyAsString(),
+                Transfer .class);
 
         jdbc.getConnection(ar -> {
 
             SQLConnection connection = ar.result();
-            dbOperations.insert(account, connection, (r) ->
+            dbOperations.insert(transfer, connection, (r) ->
                     routingContext.response()
                             .setStatusCode(201)
                             .putHeader("content-type", "application/json; charset=utf-8")
@@ -90,7 +90,7 @@ public class AccountRoutes {
         } else {
             Handler<AsyncResult<SQLConnection>> asyncResultHandler = ar -> {
                 SQLConnection connection = ar.result();
-                connection.execute("DELETE FROM Account WHERE id='" + id + "'",
+                connection.execute("DELETE FROM Transfer WHERE id='" + id + "'",
                         result -> {
                             routingContext.response().setStatusCode(204).end();
                             connection.close();
@@ -103,11 +103,11 @@ public class AccountRoutes {
     public void getAll(RoutingContext routingContext) {
         Handler<AsyncResult<SQLConnection>> asyncResultHandler = ar -> {
             SQLConnection connection = ar.result();
-            connection.query("SELECT * FROM Account", result -> {
-                List<Account> accounts = result.result().getRows().stream().map(Account::new).collect(Collectors.toList());
+            connection.query("SELECT * FROM Transfer", result -> {
+                List<Transfer> transfers = result.result().getRows().stream().map(Transfer::new).collect(Collectors.toList());
                 routingContext.response()
                         .putHeader("content-type", "application/json; charset=utf-8")
-                        .end(Json.encodePrettily(accounts));
+                        .end(Json.encodePrettily(transfers));
                 connection.close();
             });
         };
